@@ -1,51 +1,32 @@
 #!/usr/bin/ruby
-$LOAD_PATH.unshift *%w{.. . test}
+
 require 'mmap'
 require 'ftools'
+require 'test/unit'
 
 $pathmm = $LOAD_PATH.find {|p| File.exist?(p + "/mmap.c") }
-unless $pathmm
-   $LOAD_PATH.each do |p|
-      p p
-      if p.gsub!(%r{/test\Z}, '/') &&
-            File.exists?(p + '/mmap.c')
-         $pathmm = p
-         break
-      end
+raise "unable to find mmap.c" unless $pathmm
+
+TMP_PATH="#{$pathmm}/tmp"
+
+class TestMmap < Test::Unit::TestCase
+   def setup
+      Dir.mkdir(TMP_PATH) unless FileTest.directory?(TMP_PATH)
    end
-end
-raise "unable to find mmap.c" unless $pathmm
 
-load "#{$pathmm}/test/runit_.rb"
-
-$mmap, $str = nil, nil
-
-Inh = defined?(RUNIT) ? RUNIT : Test::Unit
-
-$pathmm = $LOAD_PATH.find {|p| File.exist?(p + "/mmap.c") }
-raise "unable to find mmap.c" unless $pathmm
-
-Dir.mkdir("#{$pathmm}/tmp") unless FileTest.directory?("#{$pathmm}/tmp")
-
-Dir["#{$pathmm}/tmp/*"].each do |f|
-   File.unlink(f) if FileTest.file?(f)
-end
-
-class TestMmap < Inh::TestCase
-   
    def internal_read
-      File.readlines("#{$pathmm}/tmp/mmap", nil)[0]
+      File.readlines("#{TMP_PATH}/mmap", nil)[0]
    end
 
    def internal_init(io = false)
       $mmap.unmap if $mmap
       file = "#{$pathmm}/mmap.c"
-      File.syscopy file, "#{$pathmm}/tmp/mmap"
+      File.syscopy file, "#{TMP_PATH}/mmap"
       $str = internal_read
       if io
-	 assert_kind_of(Mmap, $mmap = Mmap.new(File.new("#{$pathmm}/tmp/mmap", "r+"), "rw"), "<open io>")
+	 assert_kind_of(Mmap, $mmap = Mmap.new(File.new("#{TMP_PATH}/mmap", "r+"), "rw"), "<open io>")
       else
-	 assert_kind_of(Mmap, $mmap = Mmap.new("#{$pathmm}/tmp/mmap", "rw"), "<open>")
+	 assert_kind_of(Mmap, $mmap = Mmap.new("#{TMP_PATH}/mmap", "rw"), "<open>")
       end
    end
 
@@ -315,9 +296,9 @@ class TestMmap < Inh::TestCase
 
    def test_13_div
       string = "azertyuiopqsdfghjklm"
-      assert_kind_of(Mmap, m0 = Mmap.new("#{$pathmm}/tmp/aa", "a"), "new a")
-      File.open("#{$pathmm}/tmp/bb", "w") {|f| f.puts "aaa" }
-      assert_kind_of(Mmap, m1 = Mmap.new("#{$pathmm}/tmp/bb", "w"), "new a")
+      assert_kind_of(Mmap, m0 = Mmap.new("#{TMP_PATH}/aa", "a"), "new a")
+      File.open("#{TMP_PATH}/bb", "w") {|f| f.puts "aaa" }
+      assert_kind_of(Mmap, m1 = Mmap.new("#{TMP_PATH}/bb", "w"), "new a")
       assert_equal(true, m0.empty?, "empty")
       assert_equal(true, m1.empty?, "empty")
       assert_equal(m0, m0 << string, "<<")
@@ -344,9 +325,9 @@ class TestMmap < Inh::TestCase
    end
 
    def test_14_other
-      if File.exist?("#{$pathmm}/tmp/aa")
+      if File.exist?("#{TMP_PATH}/aa")
 	 string = "azertyuiopqsdfghjklm"
-	 assert_kind_of(Mmap, m0 = Mmap.new("#{$pathmm}/tmp/aa", "r"), "new r")
+	 assert_kind_of(Mmap, m0 = Mmap.new("#{TMP_PATH}/aa", "r"), "new r")
 	 assert_equal(string, m0.to_str, "content")
 	 assert_raises(TypeError) { m0[0] = 12 }
 	 assert_raises(TypeError) { m0 << 12 }
@@ -372,9 +353,12 @@ class TestMmap < Inh::TestCase
 	 end
       end
    end
-end
 
-if defined?(RUNIT)
-   RUNIT::CUI::TestRunner.run(TestMmap.suite)
+   def test_999
+      Dir["#{TMP_PATH}/*"].each do |f|
+         File.unlink(f) if FileTest.file?(f)
+      end
+      Dir.unlink TMP_PATH
+   end
 end
 
